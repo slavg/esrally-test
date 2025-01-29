@@ -1,0 +1,81 @@
+version: "2.2"
+
+services:
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    environment:
+      - node.name=es01
+      - cluster.name=${CLUSTER_NAME}
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.license.self_generated.type=${LICENSE}
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - esdata01:/usr/share/elasticsearch/data
+    ports:
+      - ${ES_PORT}:9200
+    networks:
+      - elastic
+    mem_limit: ${MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test: curl -u elastic:${ELASTIC_PASSWORD} -s http://localhost:9200 >/dev/null || exit 1
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  kibana:
+    depends_on:
+      es01:
+        condition: service_healthy
+    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+    volumes:
+      - kibanadata:/usr/share/kibana/data
+    ports:
+      - ${KIBANA_PORT}:5601
+    networks:
+      - elastic
+    environment:
+      - SERVERNAME=kibana
+      - ELASTICSEARCH_HOSTS=http://es01:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+      - NODE_OPTIONS=--openssl-legacy-provider
+      - XPACK_SECURITY_ENCRYPTIONKEY=qaz2wsx3edc4rfv5tgb6yhn7ujm8ik9ol
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=qaz2wsx3edc4rfv5tgb6yhn7ujm8ik9ol
+      - XPACK_REPORTING_ENCRYPTIONKEY=qaz2wsx3edc4rfv5tgb6yhn7ujm8ik9ol
+    mem_limit: ${MEM_LIMIT}
+
+  esrally:
+    depends_on:
+      es01:
+        condition: service_healthy
+    image: elastic/rally:latest
+    user: "1000:0"
+    networks:
+      - elastic
+    volumes:
+      - ./rally:/rally/.rally
+    command: >
+      race 
+      --track=wikipedia
+      --pipeline=benchmark-only
+      --target-hosts=es01:9200
+      --test-mode
+      --distribution-version=8.15.2
+      --client-options=basic_auth_user:elastic,basic_auth_password:${ELASTIC_PASSWORD}
+
+networks:
+  elastic:
+    driver: bridge
+
+volumes:
+  esdata01:
+    driver: local
+  kibanadata:
+    driver: local

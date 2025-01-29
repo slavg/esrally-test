@@ -44,12 +44,30 @@ services:
       - SERVERNAME=kibana
       - ELASTICSEARCH_HOSTS=http://es01:9200
       - ELASTICSEARCH_USERNAME=kibana_system
-      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+      - ELASTICSEARCH_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
       - NODE_OPTIONS=--openssl-legacy-provider
       - XPACK_SECURITY_ENCRYPTIONKEY=${XPACK_SECURITY_ENCRYPTIONKEY}
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY}
       - XPACK_REPORTING_ENCRYPTIONKEY=${XPACK_REPORTING_ENCRYPTIONKEY}
     mem_limit: ${MEM_LIMIT}
+
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    volumes:
+      - ./setup:/setup
+    networks:
+      - elastic
+    depends_on:
+      es01:
+        condition: service_healthy
+    command: >
+      bash -c '
+        echo "Setting up Elasticsearch users..."
+        curl -s -X POST -u elastic:${ELASTIC_PASSWORD} http://es01:9200/_security/user/kibana_system/_password -H "Content-Type: application/json" -d "{\"password\":\"${KIBANA_SYSTEM_PASSWORD}\"}"
+        echo "Setup completed"
+      '
+    profiles:
+      - setup
 
   esrally:
     depends_on:
@@ -60,8 +78,10 @@ services:
     networks:
       - elastic
     volumes:
-      - ./rally/.rally:/rally/.rally
-      - ./rally/tracks:/rally/tracks
+      - type: bind
+        source: ./rally/tracks
+        target: /rally/tracks
+        read_only: false
     profiles: ["tools"]
 
 networks:

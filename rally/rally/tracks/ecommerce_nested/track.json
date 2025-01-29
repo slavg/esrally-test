@@ -1,0 +1,204 @@
+{
+  "version": 2,
+  "description": "Track for ecommerce benchmarking with nested products",
+  "indices": [
+    {
+      "name": "ecommerce_nested",
+      "body": "ecommerce_nested.json"
+    }
+  ],
+  "corpora": [
+    {
+      "name": "ecommerce_nested",
+      "documents": [
+        {
+          "target-index": "ecommerce_nested",
+          "source-file": "ecommerce-documents.json.bz2",
+          "document-count": 4675,
+          "compressed-bytes": 413250,
+          "uncompressed-bytes": 7960826
+        }
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "name": "delete-index",
+      "operation-type": "delete-index"
+    },
+    {
+      "name": "create-index",
+      "operation-type": "create-index"
+    },
+    {
+      "name": "bulk-index",
+      "operation-type": "bulk",
+      "bulk-size": 1000
+    },
+    {
+      "name": "match-all",
+      "operation-type": "search",
+      "body": {
+        "query": {
+          "match_all": {}
+        }
+      }
+    },
+    {
+      "name": "mens-clothing-search",
+      "operation-type": "search",
+      "body": {
+        "query": {
+          "nested": {
+            "path": "products",
+            "query": {
+              "match_phrase": {
+                "products.category": "Men's Clothing"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "womens-clothing-search",
+      "operation-type": "search",
+      "body": {
+        "query": {
+          "nested": {
+            "path": "products",
+            "query": {
+              "match_phrase": {
+                "products.category": "Women's Clothing"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "category-price-stats",
+      "operation-type": "search",
+      "body": {
+        "size": 0,
+        "aggs": {
+          "products_nested": {
+            "nested": {
+              "path": "products"
+            },
+            "aggs": {
+              "categories": {
+                "terms": {
+                  "field": "products.category.keyword",
+                  "size": 10
+                },
+                "aggs": {
+                  "avg_price": {
+                    "avg": {
+                      "field": "products.price"
+                    }
+                  },
+                  "min_price": {
+                    "min": {
+                      "field": "products.price"
+                    }
+                  },
+                  "max_price": {
+                    "max": {
+                      "field": "products.price"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "nested-product-search",
+      "operation-type": "search",
+      "body": {
+        "query": {
+          "nested": {
+            "path": "products",
+            "query": {
+              "bool": {
+                "must": [
+                  {
+                    "range": {
+                      "products.price": {
+                        "gte": 20
+                      }
+                    }
+                  },
+                  {
+                    "match": {
+                      "products.category": "Clothing"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "challenges": [
+    {
+      "name": "indexing-benchmark",
+      "description": "Testing bulk indexing with different concurrency",
+      "default": true,
+      "schedule": [
+        {
+          "operation": "delete-index"
+        },
+        {
+          "operation": "create-index"
+        },
+        {
+          "operation": "bulk-index",
+          "warmup-time-period": 60,
+          "clients": 8
+        }
+      ]
+    },
+    {
+      "name": "search-benchmark",
+      "description": "Various search operations benchmark",
+      "schedule": [
+        {
+          "operation": "match-all",
+          "warmup-iterations": 50,
+          "iterations": 100,
+          "clients": 4
+        },
+        {
+          "operation": "mens-clothing-search",
+          "warmup-iterations": 50,
+          "iterations": 100,
+          "clients": 4
+        },
+        {
+          "operation": "womens-clothing-search",
+          "warmup-iterations": 50,
+          "iterations": 100,
+          "clients": 4
+        },
+        {
+          "operation": "category-price-stats",
+          "warmup-iterations": 50,
+          "iterations": 100,
+          "clients": 2
+        },
+        {
+          "operation": "nested-product-search",
+          "warmup-iterations": 50,
+          "iterations": 100,
+          "clients": 4
+        }
+      ]
+    }
+  ]
+}
